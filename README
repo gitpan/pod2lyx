@@ -1,12 +1,5 @@
-Howdy! ( thats Texan for Hi for those that don't know ) For now this is the only
-documentation availible for this package. I hope to have this shortcomming fixed
-by the next release.
+Howdy! ( thats Texan for Hi for those that don't know )
 
-################################################################################
-# NOTICE: This is a alpha code release so handle it acordingly. I do not believe
-#   it will damage your system but you never know. This software will only write
-#   to the current directory or the directory supplied on the command line for
-#   the output file. It will open other files in read mode only.
 ################################################################################
 # The software in this package is copyrighted 2000 (c) by Richard D. Jackson
 #
@@ -84,10 +77,9 @@ Things that eather are not implemented or don't work as expected:
 1) E<escapecode> is not converted.
 2) C< soemthing B<something> something > does not work correctly. The output
       will contain one to many spaces.
-3) L<> For now I'm just outputing the contents of what is inside the link tag.
 
-Also their are some pod's that just don't quite look right when conveted to the
-LyX format.
+Also there are some pod's that just don't quite look right when conveted to the
+LyX format but with each release this is getting better.
 
 
 Bugs:
@@ -97,7 +89,7 @@ Bugs:
 Contact:
 
 For now use my main mail account richardj@1gig.net. I do monitor the lyx-users
-list so if you post something their I will mostlikly find it. When sending me
+list so if you post something there I will mostlikly find it. When sending me
 something please put pod2lyx in the header so I don't just delete it when I
 clean out my mail box. Also if you don't mind drop me a note if you find this
 usfull.
