@@ -1,0 +1,325 @@
+#!/usr/bin/perl -w
+################################################################################
+# Name : pod2lyx
+#
+# Description : Convert a pod formated document to a LyX formated document.
+#
+# Copyright 2000 by Richard D. Jackson <richardj@1gig.net>
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the same terms as Perl itself.
+#
+
+use strict;
+use Pod::Lyx;
+use Getopt::Long;
+use File::Find;
+
+################################################################################
+# Option vars
+################################################################################
+
+my($lyx_class) = "article";   # LyX document class.
+my($lyx_title) = '';          # LyX document title
+my($lyx_index) = 1;           # Include a index in the document?
+my($lyx_output) = '';         # Output file name
+my($lyx_tabstop) = 4;         # Tab stop value
+
+################################################################################
+# Globals
+################################################################################
+
+my($podfile);                 # Pod file to process. This is fully qualified
+my($title);                   # Pod title to use for the found pod files...
+my($outfile);                 # default output file name..
+my(@pod_pattern);             # the Pod we are looking for.
+my($depth);                   # how deep is the pod file. Other words given a
+                              # a pod file of Pod::Parse depth will equal 1
+                              # meaning that the the pod file is in a sub
+                              # subdirectory off the root search path.
+my($extention);               # did the user supply an extention on the pod
+                              # file? if yes this will contain the extension.
+my($found);                   # have we already found the pod file?
+
+################################################################################
+# Main section of code
+################################################################################
+
+# vars local to the main section of code...
+my($result);                  # used to catch error codes
+my($i);
+my($parser);
+
+$result = GetOptions(   'textclass=s' => \ $lyx_class ,
+                        'title=s' => \ $lyx_title,
+                        'noindex' => \ $lyx_index,
+                        'tabstop=i' => \ $lyx_tabstop
+                    );
+
+if ( $result ) {     # did the options get parsed correctly?
+   print "Options process corectly!\n";
+   print "ARGV contains @ARGV\n";
+   print "lyx_class  = $lyx_class \n";
+   print "lyx_title  = $lyx_title \n";
+   print "lyx_index  = $lyx_index \n";
+   print "lyx_tabstop = $lyx_tabstop \n";
+}
+
+$found = 0;                      # set the found flag for the find_pod sub..
+if (defined( $ARGV[0]) ) {
+   $result = find_pod( $ARGV[0] );
+} else {
+   $result = 0;
+}
+
+if ($result ) {
+   # set the title if the user hasn't specified one..
+   if ($lyx_title eq '' ) {
+      $lyx_title = $title;
+   }
+
+   $parser = Pod::Lyx->new(   lyx_class => $lyx_class,
+                              lyx_title => $lyx_title,
+                              lyx_index => $lyx_index,
+                              lyx_tabstop => $lyx_tabstop
+                           );
+   if ( defined($ARGV[1]) ) {
+      $parser->parse_from_file( $podfile, $ARGV[1] );
+   } else {
+      $parser->parse_from_file( $podfile, $outfile );
+   }
+
+}  # end if ($result)
+
+################################################################################
+# find_pod
+################################################################################
+# this sub is used to find the pod file.
+# we search the @INC path to find the specified pod. If it is not found we look
+# in the current directory...
+# Note we return all found matches...
+# note this file
+
+sub find_pod {
+   my($filename) = $_[0];
+   my($temp);              # just a plain old temp value..
+   my(@tarray);            # temp array..
+   my($tempfile);          # temp file name holder...
+   local $_ = shift;
+
+
+   # Ok one of the first things we need to determin is whether the user
+   # supplied a fully qualified file name.
+   # NOTE: We assume a fully qualified file name either starts with / or ./
+   if ( (/^\//) or ( /^\.+\// ) ) {
+      if ( is_fqfn($_) ) {
+         return(1);
+      }
+   }
+   # ok now we need to see if the file is in the current directory....
+   if (!( /::/ ) ) {    # if not a pod class def see if in current dir..
+      if ( in_current_dir($_) ) {
+         return(1);
+      }
+   }
+   # Ok the user did not specify a direct filename so lets search the
+   # perl tree to see if we can find it.
+   # first split up the pod name into a directory file name array
+   @pod_pattern = split( /::/, $filename);
+   $depth = @pod_pattern - 1;
+
+   # see if the user supplied a file extion for the file to be processed...
+   # The user should not supply a file extion but lets check to be safe.
+   @tarray = split( /\./, $pod_pattern[$depth] );
+   if ( @tarray > 1 ) {   # we have an extention...
+      $pod_pattern[$depth] = $tarray[0];
+      $extention = $tarray[1];
+   } else {
+      $extention = '';
+   }
+   # now lets search the perl include path to see if we can find it.
+   find( \&want_file, @INC );
+   return($found);
+}
+
+################################################################################
+# want_file
+################################################################################
+# this function is called when we are searching for the pod file..
+# its job is to determin if this is the file we are looking for.
+
+sub want_file {
+   local $_ = $File::Find::name;
+   my(@fn);                # split version of the file name being processed.
+   my($l_depth);           # How deep are we into the directory path?
+   my($l_ext);             # extention of the file being processed...
+   my(@tarray);            # temp array..
+   my($temp);              # your good old basic temp value..
+   my($i);                 # loop itirator..
+
+   if ( $found ) {      # have we already found the file we are looking for?
+      return;           # yes so no need to go farther...
+   }
+
+   if ( /^\./ ) {    # check to see if this is a config file or just plain old
+      return;        # ./ in either case return..
+   }
+
+   s/\Q$File::Find::topdir\/// ;  # pull the base path off the current file name
+   @fn = split( /\//, $_ );      # split up the filename into its componet parts
+   $l_depth = @fn - 1;           # how deep are we into the directory struct?
+
+   @tarray = split( /\./, $fn[$l_depth] );   # pull off file extion
+   $fn[$l_depth] = $tarray[0];
+
+   # we have an exception to the generl rule in that the pod directory only
+   # contains pod's not class libs. so we need to account for it
+   # other words if the user passes perltoc the file will be in /pod/perltoc.pod
+   # and not in the root directory.
+   if ( ( $fn[0] eq "pod") and ( $l_depth > 0 ) and ( $depth == 0 ) ) {
+      if ( $fn[1] eq $pod_pattern[0] ) {  # we have the file we are looking for.
+         $_ = $fn[1];
+         s/\..+//;                  # now pull off the extention...
+         $outfile = $_ . ".lyx";
+         $title = $_;               # this should now be the default title..
+         $podfile = $File::Find::name; # set the pod file name
+         $found = 1;                # set the found flag..
+         return;
+      }
+   }
+
+   if ( $l_depth != $depth ) {      # if the file depth is wrong return..
+      return;
+   }
+
+   for ( $i = 0; $i <= $depth; $i++ ) {      # see if we have a match
+      if ( !($fn[$i] eq $pod_pattern[$i]) ) {
+         return;
+      }
+   }
+   # Ok we found what we think is a match...
+   # but we need to check a few things to make sure we did.
+   # 1) if the user supplied an extention we need to check it.
+   # 2) Check to see if the file has pod data in it...
+   #
+
+   if ( !($extention eq '') ) {
+      if (! ($extention eq $tarray[1]) ) {
+         return;     # extentions did not match!
+      }
+   }
+
+   # Ok we now know we have a match so lets open the file and see if it has
+   # pod data in it...
+   open(TEST, "<", $File::Find::name) or die "Can't open $File::Find::name : $!";
+   while (<TEST>) {
+      if (/^=head/) {
+         $podfile = $File::Find::name;
+         $found = 1;
+         last;
+      }
+   }
+
+   close(TEST) or die "Can't close $File::Find::name : $!";
+
+   # Ok we have a few things left to do..
+   # Set the document title to the path where we found the document.
+   $temp = '';
+   for ( $i = 0; $i < @fn; $i++ ) {
+      if ($i > 0) {
+         $temp .= "::" . $fn[$i];
+         $_ .= "_" . $fn[$i];
+      } else {
+         $temp = $fn[$i];
+         $_ = $fn[$i];
+      }
+   }
+   $title = $temp;
+   $outfile = $_ . ".lyx";
+   return;
+}
+
+
+################################################################################
+# sub is_fqfn
+################################################################################
+# this sub takes a file name and will determin if it is a fully qualified file
+# name and also if that file contains pod data...
+# it returns 1 if the file exists and contains pod data other wise it returns 0
+#
+# NOTE: it will set these Globals:
+#  $podfile, $title, $outfile, and $found
+
+sub is_fqfn {
+   local $_ = shift;
+   my(@tarray);
+   my($filename) = $_;
+
+   # ok we think we have a fully qualified file name so lets see if we can
+   # find it...
+   if ( open(TEST, "<", $_ ) ) {    # did we open the file?
+      while (<TEST>) {     # yes so lets see if the file contains pod data...
+         if (/^=head/) {
+            $found = 1;
+            last;
+         }
+      }
+      close(TEST) or die "Can't close $filename : $!";
+      # now lets set a default title and output file name..
+      if ( $found ) {
+         $_ = $filename;
+         s/^\.+\///;    # pull off the ./ if it exists..
+         s/^\///;       # pull of the / if it exists...
+         @tarray = split(/\//);     # split FQFN into its componet parts...
+         # for the title we just use the file name minus the extention..
+         $_ = @tarray[(@tarray - 1)];
+         s/\..+//;                     # pull off the extention...
+         $outfile = $_ . ".lyx";       # set the default output filename..
+         $title = $_;                  # set the default title..
+         $podfile = $filename;         # set the pod file name
+         return(1);
+      } ##### end if ( $found ) #########################
+   } ##### end if (TEST) ################################
+
+   ## if we got here it means we did not find what we thought we should have..
+   return(0);
+}
+
+################################################################################
+# sub in_current_dir
+################################################################################
+# this sub determins if the file is in the current directory....
+# NOTE: this sub will set these globals:
+#  $podfile, $title, $outfile, and $found
+
+sub in_current_dir {
+   local $_ = shift;
+   my($filename) = $_;
+   my(@tarray);
+
+   if ( open(TEST, "<", $_ ) ) {    # did we open the file?
+      # yes so lets see if the file contains pod data...
+      while (<TEST>) {
+         if (/^=head/) {
+            $found = 1;
+            last;
+         }
+      }
+      close(TEST) or die "Can't close $filename : $!";
+      if ( $found ) {
+         $_ = $filename;
+         s/^\.+\///;    # pull off the ./ if it exists..
+         s/^\///;       # pull of the / if it exists...
+         # split the FQFN up into its componet parts...
+         @tarray = split(/\//);
+         # for the title we just use the file name minus the extention..
+         $_ = @tarray[(@tarray - 1)];
+         s/\..+//;                  # pull off the extention...
+         $outfile = $_ . ".lyx";    # set the default output filename..
+         $title = $_;               # default title..
+         $podfile = $filename;      # set the pod file name
+         return(1);
+      }
+   }
+   return(0);
+}

@@ -1,0 +1,10 @@
+Changes             -- Change history file
+MANIFEST            -- shipping files
+Makefile.PL         -- Perl Makefile template.
+README              -- Main documentation file For now
+
+scripts/pod2lyx   -- A script to convert pod files to LyX files
+                       ( A wraper for Pod::Lyx )
+
+lib/Pod/Lyx.pm    -- Pod::Lyx class module. The main engine for this package.
+
