@@ -1,7 +1,8 @@
-Changes             -- Change history file
+CHANGES             -- Change history file
+TODO                -- List of things ToDo.
 MANIFEST            -- shipping files
 Makefile.PL         -- Perl Makefile template.
-README              -- Main documentation file For now
+README              -- Read me file
 
 scripts/pod2lyx   -- A script to convert pod files to LyX files
                        ( A wraper for Pod::Lyx )

@@ -21,7 +21,6 @@ pod documentation into a format readable by LyX ( see http://www.lyx.org for
 information on LyX ).
 
 Why did I write this?
-=====================
 
 I really wanted a good way to print pod documentation where I could control
 certin aspects of the process. I'm sure some of you are saying that their are
@@ -31,14 +30,13 @@ myself that I could get what I wanted out of LyX if I could just get the pod
 documentation into LyX. So I created this package to do the pod to LyX
 conversion stuff. Now I can use LyX to get the results I want. So I'm happy
 for now that is. This converter as it stands is lacking many things but
-it will do 80-90% of the work for me or you if you decide to use it. I do hope I
+it will do 95% of the work for me or you if you decide to use it. I do hope I
 will be able to get the converter to do more of the work later thus reducing
 the amount of time I/you have to spend tweeking little bits here and their to
 get the results I/we want.
 
 
 How to install the package?
-============================
 
 perl Makefile.PL
 make
@@ -46,81 +44,40 @@ make install
 
 Thats it you are ready to go.
 
-How do I run this without installing it?
-=========================================
-
-In the directory that you expanded the tar ball in do this:
-
-    cp -R ./lib/Pod ./Pod
-    cp ./scripts/pod2lyx ./pod2lyx
-
-You can now use pod2lyx without installing it. But you will need to be in the
-source directory or it will not work correctly.
-
-
 How do I use this thing?
-=========================
 
 1) You have a pod file in the current directory that you want to convert.
 
-    pod2lyx podfile.pod
-    pod2lxy perlwithpod.pl
-    pod2lyx perlmodule.pm
+pod2lyx podfile.pod
+pod2lxy perlwithpod.pl
+pod2lyx perlmodule.pm
 
 2) You have a pod file in some directory that you want to convert.
 
-    pod2lyx somedir/podfile.[whatever]
+pod2lyx somedir/podfile.[whatever]
 
 3) You want to convert a pod file shipped with Perl.
 
-    pod2lyx perlpod         # don't put an extention on pod documentation that
-                            # is distributed with perl.
+pod2lyx perlpod         # don't put an extention on pod documentation that
+                        # is distributed with perl.
 
 4) You want to extract the pod documentation from an installed module or script.
 
-    pod2lyx Pod::Lyx    # note this will not produce any thing at this time
-                        # because Pod::Lyx does not contain any pod
-                        # documentation yet :(
+pod2lyx Pod::Lyx    # note this will not produce any thing at this time because
+                    # Pod::Lyx does not contain any pod documentation yet :(
 
-    pod2lyx open        # this will extract the pod documentation out of the
-                        # first open.* match. Other wise if you have installed
-                        # a open.pl and a open.pm and they both contain pod data
-                        # the first one found will be converted. NOTE: If you
-                        # were to have something like File/open.pm installed
-                        # this will not match because it is not at the same
-                        # level in the module tree. You would want to use
-                        # File::Open instead.
+pod2lyx open        # this will extract the pod documentation out of the first
+                    # open.* match. Other wise if you have installed a open.pl
+                    # and a open.pm and they both contain pod data the first
+                    # one found will be converted. NOTE: If you were to have
+                    # something like File/open.pm installed this will not match
+                    # because it is not at the same level in the module tree.
 
-5) For now pod2lyx is quiet in that no error messages are output when it can't
-   find the pod file it just exits :( Also no usage statment is printed to the
-   teminal when you just type pod2lyx. This is one of the first things I will
-   be adding for the next release.
+5) To get a list of the availible options.
 
+pod2lyx -help           # brief help screen
+pod2lyx -man            # more in depth help screen.
 
-There are a couple of options that you can pass to pod2lyx that actualy work
-right now.
-
-inputfile                     the file to convert to LyX it must be on the
-                              command line before the outputfile name.
-
-outputfile                    The file name to use when writing the LyX file. By
-                              default the file will be named podfile.lyx for
-                              normal pod files. For class files or modules like
-                              Pod::Lyx it will be Pod_Lyx.lyx.
-
--lyx_title="document title"   use this to over ride the default tile. Currently
-                              the default title will be the pod file name or
-                              class name
-
--lyx_indeex=0                 A 0 means do not generate a index. The default 1
-                              will generate a index.
-
--lyx_tabstop=8                use this to over ride the default tab stop that
-                              is used when expanding tabs in verbatium text.
-                              perlpod states that the tab stop should be set to
-                              8 but in reality most if not all pods use a tab
-                              stop of 4. The default is 4 because it works in
-                              most cases.
 
 Things that eather are not implemented or don't work as expected:
 
@@ -131,18 +88,6 @@ Things that eather are not implemented or don't work as expected:
 
 Also their are some pod's that just don't quite look right when conveted to the
 LyX format.
-
-My ToDo list in order of priority:
-1) Write better documentation
-2) Fix pod2lyx so that error messages are reported to the user versas just exit.
-3) Have pod2lyx display a usage screen
-4) Work on creating links correctly.
-5) Work on making those pod files that just don't look right look right.
-6) Work on the C<> bug.
-7) Implement handling of escapes in the pod file.
-8) Look into putting a foot note on page one indicating the file name and
-   version of the file/module used to generate the LyX file. This would let us
-   know if we need to print a new copy when we update our software.
 
 
 Bugs:
@@ -156,5 +101,3 @@ list so if you post something their I will mostlikly find it. When sending me
 something please put pod2lyx in the header so I don't just delete it when I
 clean out my mail box. Also if you don't mind drop me a note if you find this
 usfull.
-
-

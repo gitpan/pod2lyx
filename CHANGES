@@ -1,0 +1,19 @@
+Revision history for Perl extension Pod::Lyx and pod2lyx.
+
+0.20
+
+    - Added usage output from pod2lyx.
+    - Added pod documentation to pod2lyx.
+    - Moved ToDo list out of the README file and put in the TODO file.
+    - Added and fixed the handling of multiparagraph lists. Run pod2lyx on
+        ExtUtils::MakeMaker to see what I mean as it puts all kinds of stuff
+        in a list.
+    - Added the ability to handle multilevel lists.
+    - Added the ability to automaticly place a pagebreak after the contents.
+        See pod2lyx -help for information on how to do this.
+    - Fixed many small bugs.
+
+0.10  Tuesday May 3, 2000
+
+    - Initial release.
+

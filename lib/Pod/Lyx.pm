@@ -23,7 +23,7 @@ use Text::Tabs;
 
 use strict;
 use vars qw(@ISA %ESCAPES $VERSION %LyxCodes $VERSION);
-$VERSION = 0.10;        # current module version.
+$VERSION = 0.20;        # current module version.
 @ISA = qw(Pod::Parser);
 
 ################################################################################
@@ -113,6 +113,7 @@ $VERSION = 0.10;        # current module version.
    "\\series"                 => 1,    # the begining of a series change..
    "\\shape"                  => 1,    # a shape change
    "\\family"                 => 1,    # a change in font family
+   "\\backslash"              => 0,    # a backslash
    # their are more codes but these are the ones we are using for now.
 );
 
@@ -132,6 +133,15 @@ sub initialize {
    $$self{tab}          = 4 unless defined $$self{tab};
    $$self{MODE}         = "";    # the current translation mode we are in.
    $$self{ListLevel}    = 0;     # the current list level
+   $$self{listdata}     = "";    # used to hold a list data item...
+   $$self{outbuff}      = "";    # used to hold the output buffer.
+   $$self{deeper}       = 0;     # used to indicate that we have forced a
+                                 # to a deeper indention level.
+   $$self{verbatimspace} = 0 unless defined $$self{verbatimspace};
+   $$self{over}         = 0;     # indicates wheter or not we have output a
+                                 # over command.
+   $$self{paragraph}    = 0;     # How many paragraphs have we output while in
+                                 # a list/enumerate/itimize context.
 
    $self->SUPER::initialize;
 
@@ -188,8 +198,7 @@ sub verbatim {
 
    # see if this is our first line of verbatam text...
    if ( !($$self{MODE} eq "verbatim" ) ) {
-      # We are going into verbatim mode ..
-      $$self{MODE} = "verbatim";
+      $self->mode_switch("verbatim");     # call switching code..
       # on a first pass we need to see what the indention level is on the
       # source code or verbatim paragraph...
       # LyX automaticly indents verbatim paragraphs so we are going to
@@ -211,7 +220,13 @@ sub verbatim {
          $$self{indent} = $$self{tab}; # this is so it looks ok under LyX....
       }
 
+   } else {
+      if ( !($$self{outbuff} eq "" )) {
+         $self->output($$self{outbuff});
+         $$self{outbuff} = "";
+      }
    }
+
    # Before we do any thing else we need to see how many newlines are at the
    # end of the paragraph so we can format it correctly..
    $temp = length($_);     # Note is will cause problems if the string is
@@ -262,10 +277,11 @@ sub verbatim {
       $self->output($_ . "\n");
    }
 
-   # output any extra newlines that we need.
+   # output any extra newlines that we need. Note: we don't actual out put
+   # this here we just format the output line
    if ($newlines) {
       while ($newlines > 0 ) {
-         $self->output("\\newline \n \n"); # LyX puts a space after newline
+         $$self{outbuff} .= "\\newline \n \n"; # LyX puts a space after newline
          $newlines--;                     # not sure why but it does...so we
       }                                   # are going to as well...
    }
@@ -287,22 +303,34 @@ sub textblock {
    my $line = shift;
    my @input_lines;
 
+   # before we do anything else check for \ and replace it...
+   s/\\/\n\\backslash \n/g;
+
    if ( !( $$self{MODE} eq "textblock") ) {
       # ok we have to determin how this was called which can be a little tricky.
       # and we have to make some assumptions about certin things...
-      if ( $$self{MODE} eq "item" ) {
-         # for list items we just out put the text...But we could be switching
-         # out of item mode and we need to detect that..
-         if ( $$self{ListLevel} > 0 ) {   # are we inside a list
-            # yes so just dump the text...
-            $_ = $self->interpolate($_, $line);
-            $_ = $self->wrap( $_ );
-            $self->output( $_ );
-            return;
-         }
+      # for all list type items we just dumb the paragraph..
+      if ( ( $$self{MODE} eq "itemize" ) or ( $$self{MODE} eq "enumerate") ) {
+         $_ = $self->interpolate($_, $line);
+         $_ = $self->wrap( $_ );
+         $self->output( $_ );
+         $$self{paragraph}++;
+         $$self{MODE} = "";      # must unset the mode.
+         return;
+      }
+      if ( $$self{MODE} eq "list" ) {  # lists must be handled differantly..
+         $_ = $$self{listdata} . " " . $_;
+         $$self{listdata} = "";
+         $_ = $self->interpolate($_, $line);
+         $_ = $self->wrap( $_ );
+         $self->output( $_ );
+         $$self{paragraph}++;
+         $$self{MODE} = "";      # must unset the mode.
+         return;
       }
 
-      $$self{MODE} = "textblock";
+      $self->mode_switch("textblock");
+
    }
 
    #Now actually interpolate and output the paragraph.
@@ -340,12 +368,14 @@ sub interior_sequence {
 
    #### ITALICS ############
    if ( $command eq 'I') {
-      return ( "\\shape italic\n" . $_ . " \n\\shape default\n");
+      return ( "\\shape italic \n" . $_ . " \n\\shape default \n");
    }
 
    ###### CODE OR TYPEWRITER TEXT ######
-   if ( $command eq 'C') {
-      return ( "\n\\family typewriter\n" . $_ . "\n\\family default\n");
+   if ( $command eq 'C') {    # ran across a issue where the typewritertext
+                              # included a \ in it so we need to check for it.
+      #s/\\/\n\\backslash \n/g;   # replace \ with the command "\backslash\n"
+      return ( "\n\\family typewriter \n" . $_ . "\n\\family default \n");
    }
 
    #### NON BREAKING SPACES ##########
@@ -426,10 +456,16 @@ HEAR_DOC
    # ok the main preamble is done now lets set the title...
    # note lyx_title is set by the class user when they create the class..
    if (defined $$self{lyx_title} ) {
-      print $out_fh "\\layout Title\n" . $$self{lyx_title} .
+      print $out_fh "\\layout Title\n\n" . $$self{lyx_title} .
          "\n\\layout Standard\n";
    }
 
+   # insert a page break if the class user asked for it...
+   if (defined $$self{lyx_index_break} and $$self{lyx_index_break} ) {
+      print $out_fh "\\pagebreak_bottom ";
+   }
+
+   # insert a index if the class user asked for it...
    if ( (defined $$self{lyx_index} ) and $$self{lyx_index} ) {
       # do we want an index?
       print $out_fh "\n\n\\begin_inset LatexCommand \\tableofcontents{}\n\n\\end_inset \n\n\n";
@@ -560,6 +596,10 @@ sub cmd_back {
    # one level..
    if ($$self{ListLevel} > 0 ) {
       $self->output("\\end_deeper\n");
+      $$self{MODE} = "";      # this will wipe out a list context..
+   }
+   if ($$self{over}) {
+      $self->output("\\end_deeper\n");
    }
 
 }
@@ -569,25 +609,58 @@ sub cmd_back {
 ###############################################################################
 # An individual list item...
 #
+# The problem: Pod::Parser pases each =item into this procedure so we must
+# determin what type of item this is. The types we must determin are:
+# * which means a built list
+# # where # equals sum number means a numberd list
+# [a-z] equals some list item...
+# so we have three modes we need to account for
+# 1) a numbered list or enumerate in LyX speek.
+# 2) a bullet list or itemize in LyX speek.
+# 3) a word list. or list in LyX speek.
 
 sub cmd_item {
    my $self = shift;
    local $_ = shift;
+   my $command = $_;    # save the command for later referance..
 
-   # note this section of code will be used later to do some clean up when
-   # switching modes...
-   if ( !( $$self{MODE} eq "item") ) {
-      $$self{MODE} = "item";
+   s/^item //;          # strip the item section off the command. Notice the
+                        # space we want that gone as well.
+   s/\s+$//;            # strip all trailing spaces and newlines
+
+   if ( $_ eq "*" ) {      # we have a bullet list
+      if (!( $$self{MODE} eq "itemize") ) {
+         $self->mode_switch("itemize");
+      }
+      $self->output("\\layout Itemize\n\n"); # note the data for the item will
+                                             # be handled by the standard
+                                             # paragraph handler...
+      $$self{paragraph} = 0;  # reset our paragraph counter..
+      return;
    }
 
-   if ( /\*/ ) {
-      s/\*\s+//;
-      $self->output("\\layout Itemize\n\n" . $_ );
+   if ( /^\d+/ ) { # we have a numbered list...
+      if ( !( $$self{MODE} eq "enumerate") ) {
+         $self->mode_switch("enumerate");
+      }
+      $self->output("\\layout Enumerate\n\n");
+      $$self{paragraph} = 0;
+      return;
    }
 
-
-   # Ok now what we need to do is determin what type of list item we have...
-
+   if ( /\w+/ ) { # do we have a list? NOTE the test for a number list must come
+                  # first or this will not work correctly...
+      if (!($$self{MODE} eq "list" )) {
+         $self->mode_switch("list");
+      }
+      $self->output("\\layout List\n\\labelwidthstring 00.00.0000\n\n");
+      # I'm not sure what the labelwidthstring does but it is needed.
+      # also if the list head has spaces in it we must escape them...
+      s/\s/\\protected_separator\n/g;
+      $$self{listdata} = $_;
+      $$self{paragraph} = 0;
+      return;
+   }
 
 }
 
@@ -646,6 +719,11 @@ sub cmd_for {
 # Actualy Text::Wrap works with the current LyX parser but that is no guantee
 # that it will work in the future. So I'm writing this to be on the safe side.
 #
+# Found a bug in this code in that LyX formats a paragraph such that each line
+# will wrap at around 78 not 80 and a sentance ends the wraping. NOTE: I call
+# this a bug because LyX does somthing differant when savaing a file than what
+# I'm doing here. So I'm trying to fixit such that they match as much as
+# posable.
 
 sub wrap {
    my $self = shift;
@@ -696,7 +774,7 @@ sub wrap {
       # Ok this is not a key word so we need to process it...
       # Note this section of code will puke when the input has double byte
       # chars in it...After I get the single byte stuff working I'll look
-      # into doing double byte chars..
+      # into doing double byte chars..if users ask for it that is.
 
       # I ran into a case where a control sequance starts a paragraph
       # that a space and or a \n just will get through
@@ -714,11 +792,21 @@ sub wrap {
          $output .= "\n " . $val . " ";
          $curlen = length($val) + 1;
          $lines++;                  # note control lines don't count!
+         if ( $val =~ /\.$/ ) {
+            $output .= "\n ";
+            $lines++;
+         }
       } else {
          if ( ( $curlen == 0 ) and ( $lines > 0 ) ) {
             $output .= " " . $val . " ";
             $curlen += length($val) + 2;
          } else {
+            if ( $val =~ /\.$/ ) {    # is this an end of sentance?
+               $output .= $val . "\n ";
+               $curlen = 1;      # the space...
+               $lines++;
+               next;
+            }
             $output .= $val . " ";
             $curlen += length($val) + 1;
          }
@@ -757,6 +845,73 @@ sub cmd_space {
       }
    }
    return($output);
+}
+
+################################################################################
+# mode_switch
+################################################################################
+# this function is used when switching modes from one type of paragraph to
+# another. It handles a few things that need to be cleaned up when switching
+# modes...It also sets the current mode when it needs to be set...
+#
+
+sub mode_switch {
+   my $self = shift;
+   my $Caller = shift;     # who called this function....
+
+   if ($$self{MODE} eq "verbatim" ) {
+      # what we are doing here is removing trailing newlines so we get a more
+      # compact document. We allow the user of this module to set wether or
+      # not we do this..
+      if ( $$self{verbatimspace} ) {
+         $self->output($$self{outbuff});
+      }
+      $$self{outbuff} = "";
+   }
+
+   if ( ($Caller eq "verbatim") and ( ($$self{MODE} eq "list") or
+                                      ($$self{MODE} eq "itemize") or
+                                      ($$self{MODE} eq "enumerate")) ) {
+      if (!($$self{listdata} eq "" ) ) {
+         $self->output("$$self{listdata} \n");
+      }
+
+   }
+
+   if ( $$self{ListLevel} ) {
+      # We are inside a list so we need to take the apropriate acction..
+      # NOTE this function does not get called for the first paragraph in a
+      # list.
+      # if one of the lists is calling us we don't need to worry about it.
+      if ( ($Caller eq "list") or ($Caller eq "itemize") or
+           ($Caller eq "enumerate") ) {
+         if ( $$self{over} ) {
+            $self->output("\\end_deeper\n");
+            $$self{over} = 0;
+         }
+         $$self{MODE} = $Caller;
+         return;
+      }
+      if ( $$self{over} ) {      # have we already moved over?
+         $self->output("\\end_deeper\n"); # move back...
+         # now we know that this is not in a list context so what we have
+         # is another paragraph inside the list so we need to also move it
+         # over as well...
+         $self->output("\\begin_deeper\n");
+         $$self{over} = 1;
+         $$self{MODE} = $Caller;
+         return;
+      }
+      # other wise we need to fix some things up..
+      $self->output("\\begin_deeper\n");
+      $$self{over}++;
+      $$self{MODE} = $Caller;
+      return;
+   }
+
+   $$self{MODE} = $Caller;
+
+
 }
 
 1;

@@ -14,6 +14,7 @@ use strict;
 use Pod::Lyx;
 use Getopt::Long;
 use File::Find;
+use Pod::Usage;
 
 ################################################################################
 # Option vars
@@ -24,6 +25,12 @@ my($lyx_title) = '';          # LyX document title
 my($lyx_index) = 1;           # Include a index in the document?
 my($lyx_output) = '';         # Output file name
 my($lyx_tabstop) = 4;         # Tab stop value
+my($help) = 0;
+my($man) = 0;
+my($helplong) = 0;
+my($lyx_verbatimspace) = 0;   # do we output an extra line after
+                              # verbatim text...
+my($lyx_index_break) = 0;     # do we place a page break after the index?
 
 ################################################################################
 # Globals
@@ -53,23 +60,36 @@ my($parser);
 $result = GetOptions(   'textclass=s' => \ $lyx_class ,
                         'title=s' => \ $lyx_title,
                         'noindex' => \ $lyx_index,
-                        'tabstop=i' => \ $lyx_tabstop
+                        'tabstop=i' => \ $lyx_tabstop,
+                        'man' => \ $man,
+                        'help' => \ $help,
+                        'helplong' => \ $helplong,
+                        'verbatimspace' => \ $lyx_verbatimspace,
+                        'indexbreak' => \ $lyx_index_break,
                     );
 
-if ( $result ) {     # did the options get parsed correctly?
-   print "Options process corectly!\n";
-   print "ARGV contains @ARGV\n";
-   print "lyx_class  = $lyx_class \n";
-   print "lyx_title  = $lyx_title \n";
-   print "lyx_index  = $lyx_index \n";
-   print "lyx_tabstop = $lyx_tabstop \n";
+if (!($result) ) {      # did the options get parsed correctly?
+   usage(1);            # no so print a usage message..
 }
+
+## process help options first...
+if ($man) {
+   usage(2);
+}
+if ($help) {
+   usage(0);
+}
+if ($helplong) {
+   usage(1);
+}
+
 
 $found = 0;                      # set the found flag for the find_pod sub..
 if (defined( $ARGV[0]) ) {
    $result = find_pod( $ARGV[0] );
 } else {
-   $result = 0;
+   usage(0);                     # user did not pass a file name so print a
+                                 # usage message and exit..
 }
 
 if ($result ) {
@@ -81,7 +101,9 @@ if ($result ) {
    $parser = Pod::Lyx->new(   lyx_class => $lyx_class,
                               lyx_title => $lyx_title,
                               lyx_index => $lyx_index,
-                              lyx_tabstop => $lyx_tabstop
+                              tab => $lyx_tabstop,
+                              verbatimspace => $lyx_verbatimspace,
+                              lyx_index_break => $lyx_index_break,
                            );
    if ( defined($ARGV[1]) ) {
       $parser->parse_from_file( $podfile, $ARGV[1] );
@@ -89,7 +111,9 @@ if ($result ) {
       $parser->parse_from_file( $podfile, $outfile );
    }
 
-}  # end if ($result)
+} else { # end if ($result)
+   usage(11, "File $ARGV[0] not found.");
+}
 
 ################################################################################
 # find_pod
@@ -323,3 +347,133 @@ sub in_current_dir {
    }
    return(0);
 }
+
+################################################################################
+# sub usage
+################################################################################
+# This is a simple sub used to print a usage statement to the terminal.
+# This sub uses Pod::Usage to do the work of printing the usage message
+#
+# First paramiter is the output level the second paramiter is an error message
+# 0 = print synopsis
+# 1 = print synopsis and usage
+# 2 = print the whole thing
+# 10 = print synopsis along with an error message
+# 11 = print synopsis and usage with error message
+# 12 = print error message along with whole document..
+#
+
+sub usage {
+   local $_ = shift;
+
+   if ($_ == 0 ) {
+      pod2usage({ -verbose => 0, -output => \ *STDOUT });
+   }
+   if ($_ == 1 ) {
+      pod2usage({ -verbose => 1, -output => \ *STDOUT });
+   }
+   if ($_ == 2 ) {
+      pod2usage({ -verbose => 2, -output => \ *STDOUT });
+   }
+
+   if ($_ == 11 ) {
+      my($message) = shift;
+      pod2usage({ -verbose => 0, -message => "$message \n", -exitval => 1,
+                  -output => \ *STDERR });
+
+   }
+
+}
+
+__END__
+
+=head1 pod2lyx
+
+A pod to LyX format converter.
+
+=head1 SYNOPSIS
+
+pod2lyx [options] inputfile [outfile]
+
+   Options:
+      -help                   prints a brief help screen.
+      -helplong               prints more help.
+      -man                    prints the full documentation
+      -textclass="textclass"  Set the LyX textclass to use.
+      -title="title"          Set the LyX title to use.
+      -noindex                Do not include a index in the LyX file.
+      -tabstop=8              Set the Verbatium text tabstop.
+      -verbatimspace          Set flag to add a line after a verbatim
+                              text block.
+      -indexbreak             Place a page break after the index.
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<-help>
+
+Print a brief help message and exit.
+
+=item B<-helplong>
+
+Prints a little more detailed help.
+
+=item B<-man>
+
+Prints the manual page and exits. NOTE: you may want to use a pager when you
+use this option. Example C<"pod2lyx -man | less">.
+
+=item B<-textclass="textclass">
+
+Use this option to set the LyX document or textclass to use for the generated
+LyX document. Currently only the article class is supported.
+
+=item B<-title="title">
+
+Use this option to over ride the default title assigned to the generated LyX
+document. Currently the default title is the file name or class name of the
+pod file.
+
+=item B<-noindex>
+
+Use this option to turn off the creation of a index in the LyX file.
+
+=item B<-tabstop=8>
+
+Set the tabstop to use when translating tabstops embeded in verbatium text.
+According to perlpod the tabstop should be 8 but I have found that this is not
+the case. Most of the files I've come accross have the tabstop set to 4 so that
+is what pod2lyx uses by default.
+
+=item B<-verbatimspace>
+
+Set a flag to indicate that a extra line should be placed after a verbatim text
+block. The default behavior is to not put a space after the block. But in some
+cases the output will look better if a extra line is output.
+
+=item B<-indexbreak>
+
+This will case a page break to be placed after the index. The default behavior
+is to not place a page break after the index. I personaly find having a page
+break after the index to be nice thats why I added the option.
+
+=back
+
+=head1 DESCRIPTION
+
+B<pod2lyx> will read a pod file and convert that file into a native LyX document.
+The pod file can be a file only containing pod documentation or it can be a perl
+program or module with embeded pod documentation. It will search your perl
+C<@INC> path to find the pod documentation if need be to find the document.
+
+=head1 AUTHOR
+
+Richard D. Jackson richardj@1gig.net
+
+=head1 ACKNOWLEDGEMENTS
+
+I would like to thank Amir Karger for suppling me with a pod to lyx converter he
+did a while back. His example code helped allot while working on this.
+
+=cut
